@@ -2,7 +2,7 @@
 
 **A snake game made by Pygame and Python!**
 
-Choose speed on the menu - 5 speeds
+Choose speed on the menu - 6 speeds (New speed: Superior)
 
 Use arrow key to control snake
 
