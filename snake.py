@@ -6,18 +6,21 @@ def resource_path(relative):
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative)
     return os.path.join(os.path.abspath("."), relative)
+def hide_exception(exctype, value, traceback):
+    pass
 
+sys.excepthook = hide_exception
 
 # Khởi tạo Pygame
 pygame.init()
 info = pygame.display.Info()
-width = info.current_w 
+width = info.current_w
 height = info.current_h
 # Cài đặt màn hình
 screen_width = width
 screen_height = height
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Snake")
+screen = pygame.display.set_mode((screen_width,screen_height),pygame.NOFRAME)
+pygame.display.set_caption("Snake v1.0.1")
 
 # Màu sắc
 black = (0, 0, 0)
@@ -25,13 +28,14 @@ red = (255, 0, 0)
 white = (255, 255, 255)
 green = (0, 255, 0)
 yellow = (255, 255, 0)
+sc = white
 
 # Kích thước khối
 block_size = 20
 
 # Khởi tạo phông chữ
 font = pygame.font.SysFont(None, 50)
-point_font = pygame.font.SysFont(None, 70, bold=True)
+point_font = pygame.font.SysFont(None, 55, bold=True)
 title_font = pygame.font.SysFont(None, 100, bold=True)
 
 
@@ -55,10 +59,12 @@ def main_menu():
         ("MEDIUM (5)", 5, yellow),
         ("HARD (7)", 7, red),
         ("VERY HARD (14)", 14, (160,0,0)),
-        ("INSANITY (60,try to survive)", 60, (153,0,255)),
-        ("DIE BRO (???)", 600, (0,0,0))
+        ("SUPERIOR (25)", 25, (130,0,20)),
+        ("INSANITY (60, try to survive)", 60, (153,0,255)),
+        ("DIE BRO (???)", 600, (0,0,0)),
+        ("Quit",None,(220,121,0))
     ]
-    
+
     # Danh sách riêng biệt để lưu trữ các Rect (chỉ 1 giá trị)
     speed_rects = []
     
@@ -72,18 +78,18 @@ def main_menu():
         
         # Tiêu đề
         title_text = title_font.render("SNAKE GAME", True, green)
-        title_rect = title_text.get_rect(center=(screen_width / 2, screen_height / 4))
+        title_rect = title_text.get_rect(center=(screen_width / 2, screen_height / 4 - 65))
         screen.blit(title_text, title_rect)
         
         # Hướng dẫn
-        message("Select Speed:", white, screen_width / 2 - 100, start_y - 65)
+        message("Select Speed:", white, screen_width / 2 - 110, start_y - 130)
 
         # Vòng lặp 1: Vẽ và lưu Rect
         speed_rects.clear() # Đảm bảo danh sách Rect được làm mới mỗi vòng lặp
         for i, (label, speed, color) in enumerate(speed_options_data):
             y_pos = start_y + i * spacing
             text = font.render(label, True, color)
-            rect = text.get_rect(center=(screen_width / 2, y_pos))
+            rect = text.get_rect(center=(screen_width / 2, y_pos - 65))
             screen.blit(text, rect)
             
             # Chỉ lưu đối tượng Rect
@@ -103,9 +109,10 @@ def main_menu():
                 for i, rect in enumerate(speed_rects):
                     if rect.collidepoint(mouse_pos):
                         # Lấy tốc độ từ danh sách data ban đầu bằng index 'i'
-                        selected_speed = speed_options_data[i][1] 
+                        selected_speed = speed_options_data[i][1]
+
                         gameLoop(selected_speed) # Bắt đầu trò chơi với tốc độ đã chọn
-                        return # Thoát menu
+                        return selected_speed
 
 # ------------------------------------
 
@@ -113,6 +120,8 @@ def main_menu():
 def gameLoop(snake_speed): 
     game_over = False
     game_close = False
+
+
     # Vị trí đầu rắn
     x1 = screen_width / 2
     y1 = screen_height / 2
@@ -165,7 +174,7 @@ def gameLoop(snake_speed):
         while game_close == True:
             screen.fill(black)
             # THAY ĐỔI: Chuyển message thành hàm có tọa độ
-            message("You lost! Press Q to Quit or M to Menu", red, screen_width / 6, screen_height / 3)
+            message("You lost! Press Q to Quit, M to Menu or R to Restart", red, screen_width / 7 + 10, screen_height / 2 - 25)
             pygame.display.update()
 
             for event in pygame.event.get():
@@ -173,10 +182,11 @@ def gameLoop(snake_speed):
                     if event.key == pygame.K_q:
                         game_over = True
                         game_close = False
-                    if event.key == pygame.K_m: # M: quay lại Menu
+                    if event.key == pygame.K_m:
                         main_menu()
-                        return # Thoát gameLoop hiện tại
-
+                    if event.key == pygame.K_r:
+                        gameLoop(snake_speed)
+                       
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
@@ -194,7 +204,11 @@ def gameLoop(snake_speed):
                 elif event.key == pygame.K_DOWN and y1_change == 0:
                     y1_change = block_size
                     x1_change = 0
-
+                elif event.key == pygame.K_m:
+                   main_menu()
+                elif event.key == pygame.K_r:
+                   gameLoop(snake_speed)
+                
         # Cập nhật vị trí và vẽ (giữ nguyên)
         if x1 >= screen_width or x1 < 0 or y1 >= screen_height or y1 < 0:
             game_close = True
@@ -220,10 +234,9 @@ def gameLoop(snake_speed):
 
         # Hiển thị điểm số
         score = length_of_snake - 1
-        score_text = font.render(f"Speed: {snake_speed} | Score: {score}", True, white)
+        score_text = font.render(f"DPC: {snake_speed}% | Speed: {snake_speed} | Score: {score} | M to Menu | R to Restart", True, sc)
         screen.blit(score_text, [0, 0])
         
-        # --- CẬP NHẬT VÀ VẼ THÔNG BÁO ĐIỂM ---
         if points_message_active:
             time_elapsed = pygame.time.get_ticks() - points_message_start_time
             
@@ -244,26 +257,35 @@ def gameLoop(snake_speed):
 
         pygame.display.update()
 
-        # Kiểm tra ăn thức ăn (giữ nguyên logic +2 điểm)
         if x1 == food_x and y1 == food_y:
+            # 1. Tạo vị trí thức ăn mới
             food_x, food_y = generate_food_location()
             while [food_x, food_y] in snake_list:
                 food_x, food_y = generate_food_location()
+           
+            probability_of_bonus = snake_speed / 100.0
             
-            if random.random() < 0.05: 
-                length_of_snake += 2
+            # Giá trị cộng thêm khi ăn: +1 hoặc +2 (khi trúng X2)
+            bonus_length = 1
+            
+            if random.random() < probability_of_bonus: 
+                # X2 điểm (cộng 2 thay vì 1)
+                bonus_length = 2
                 
+                # Kích hoạt thông báo +2 điểm
                 points_message_active = True
                 points_message_start_time = pygame.time.get_ticks()
                 message_position = (food_x, food_y) 
                 
-            else:
-                length_of_snake += 1
+            # 3. Cập nhật độ dài rắn
+            length_of_snake += bonus_length 
 
         clock.tick(snake_speed) # Dùng biến snake_speed để kiểm soát tốc độ
 
     pygame.quit()
     quit()
 
-# Bắt đầu trò chơi bằng cách gọi hàm menu
-main_menu()
+try:
+    main_menu()
+except:
+    pass
