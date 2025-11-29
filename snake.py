@@ -1,6 +1,9 @@
 import pygame
 import random
 import os, sys
+import json
+import base64 # Import thư viện Base64
+from pathlib import Path
 
 def resource_path(relative):
     if hasattr(sys, "_MEIPASS"):
@@ -20,7 +23,7 @@ height = info.current_h
 screen_width = width
 screen_height = height
 screen = pygame.display.set_mode((screen_width,screen_height),pygame.NOFRAME)
-pygame.display.set_caption("Snake v1.1")
+pygame.display.set_caption("Snake v1.2")
 
 # Màu sắc
 black = (0, 0, 0)
@@ -50,11 +53,10 @@ def draw_floating_message(screen, msg, position, color, alpha):
     temp_surface.set_alpha(alpha)
     screen.blit(temp_surface, position)
 
-
-
-def main_menu():
-
-    speed_options_data = [
+# --- HÀM TẢI CÁC TÙY CHỌN TỐC ĐỘ TỪ TXT (BASE64 ENCODED JSON) ---
+def load_speed_options():
+    # Danh sách tốc độ MẶC ĐỊNH
+    default_speed_options = [
         ("EASY (3)", 3, green),
         ("MEDIUM (5)", 5, yellow),
         ("HARD (7)", 7, red),
@@ -62,8 +64,77 @@ def main_menu():
         ("SUPERIOR (25)", 25, (130,0,20)),
         ("INSANITY (60, try to survive)", 60, (153,0,255)),
         ("DIE BRO (???)", 600, (0,0,0)),
-        ("Quit",None,(220,121,0))
     ]
+    
+    # Thêm tùy chọn Quit vào cuối danh sách tốc độ
+    quit_option = ("Quit", None, (220,121,0))
+    file_path = resource_path('customspeed.txt')
+
+    if not Path(file_path).exists():
+        print("Using default speed options (customspeed.txt not found).")
+        return default_speed_options + [quit_option]
+
+    try:
+        # 1. Đọc nội dung tệp TXT (chứa chuỗi Base64)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            base64_data = f.read().strip()
+            
+        # 2. Giải mã Base64
+        try:
+            json_bytes = base64.b64decode(base64_data)
+        except base64.binascii.Error:
+            print("Error: customspeed.txt contains invalid Base64 string. Using default options.")
+            return default_speed_options + [quit_option]
+            
+        # 3. Chuyển Bytes thành chuỗi JSON
+        json_string = json_bytes.decode('utf-8')
+        
+        # 4. Phân tích cú pháp JSON
+        custom_data = json.loads(json_string)
+                
+        if isinstance(custom_data, list):
+            processed_options = []
+            for item in custom_data:
+                try:
+                    label = item.get("label", "Unknown")
+                    speed = item.get("speed")
+                    color_list = item.get("color", [255, 255, 255])
+                    
+                    if isinstance(speed, int) and len(color_list) == 3:
+                        color_tuple = tuple(color_list)
+                        processed_options.append((label, speed, color_tuple))
+                except Exception as e:
+                    print(f"Skipping invalid speed option in decoded JSON: {e}")
+                    
+            if processed_options:
+                print("Loaded custom speed options from customspeed.txt (Base64 decoded).")
+                return processed_options + [quit_option]
+
+        print("Decoded JSON is not a valid list of speed options. Using default options.")
+        return default_speed_options + [quit_option]
+        
+    except FileNotFoundError:
+        # Trường hợp này đã được kiểm tra ở đầu hàm, nhưng giữ lại phòng ngừa.
+        print("Using default speed options (customspeed.txt not found).")
+        return default_speed_options + [quit_option]
+    except json.JSONDecodeError:
+        print("Error: Decoded data is not valid JSON format. Using default options.")
+        return default_speed_options + [quit_option]
+    except Exception as e:
+        print(f"An unexpected error occurred while loading speed options: {e}. Using default options.")
+        return default_speed_options + [quit_option]
+
+def is_remote_collision(snake_x, snake_y, food_x, food_y, remote_blocks=4):
+    """..."""
+    dx = abs(snake_x - food_x)
+    dy = abs(snake_y - food_y)
+
+    # Kiểm tra hình vuông 4x4 (phạm vi X và Y đều tối đa là 4 khối)
+    return (dx < block_size * remote_blocks) and (dy < block_size * remote_blocks)
+def main_menu():
+    
+    # Tải tùy chọn tốc độ (từ TXT Base64 nếu có, hoặc mặc định)
+    speed_options_data = load_speed_options()
 
     # Danh sách riêng biệt để lưu trữ các Rect (chỉ 1 giá trị)
     speed_rects = []
@@ -111,8 +182,12 @@ def main_menu():
                         # Lấy tốc độ từ danh sách data ban đầu bằng index 'i'
                         selected_speed = speed_options_data[i][1]
 
-                        gameLoop(selected_speed) # Bắt đầu trò chơi với tốc độ đã chọn
-                        return selected_speed
+                        if selected_speed is None: # Xử lý nút Quit
+                            pygame.quit()
+                            quit()
+                        else:
+                            gameLoop(selected_speed) # Bắt đầu trò chơi với tốc độ đã chọn
+                            return selected_speed
 
 # ------------------------------------
 
@@ -147,7 +222,11 @@ def gameLoop(snake_speed):
         food_y = round(random.randrange(0, screen_height - block_size) / block_size) * block_size
         return food_x, food_y
 
+
     food_x, food_y = generate_food_location()
+    fxs,fys = generate_food_location()
+    fxt,fyt = generate_food_location()
+    fxf,fyf = generate_food_location()
 
     clock = pygame.time.Clock()
 
@@ -184,30 +263,36 @@ def gameLoop(snake_speed):
                         game_close = False
                     if event.key == pygame.K_m:
                         main_menu()
+                        game_close = False 
+                        game_over = True 
                     if event.key == pygame.K_r:
                         gameLoop(snake_speed)
+                        game_close = False 
+                        game_over = True 
                        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
             if event.type == pygame.KEYDOWN:
                 # Logic điều khiển rắn (giữ nguyên)
-                if event.key == pygame.K_LEFT and x1_change == 0:
+                if (event.key == pygame.K_LEFT or event.key ==  pygame.K_a) and x1_change == 0:
                     x1_change = -block_size
                     y1_change = 0
-                elif event.key == pygame.K_RIGHT and x1_change == 0:
+                elif (event.key == pygame.K_RIGHT or event.key ==  pygame.K_d) and x1_change == 0:
                     x1_change = block_size
                     y1_change = 0
-                elif event.key == pygame.K_UP and y1_change == 0:
+                elif (event.key == pygame.K_UP or event.key ==  pygame.K_w) and y1_change == 0:
                     y1_change = -block_size
                     x1_change = 0
-                elif event.key == pygame.K_DOWN and y1_change == 0:
+                elif (event.key == pygame.K_DOWN or event.key ==  pygame.K_s) and y1_change == 0:
                     y1_change = block_size
                     x1_change = 0
                 elif event.key == pygame.K_m:
                    main_menu()
+                   game_over = True 
                 elif event.key == pygame.K_r:
                    gameLoop(snake_speed)
+                   game_over = True 
                 
         # Cập nhật vị trí và vẽ (giữ nguyên)
         if x1 >= screen_width or x1 < 0 or y1 >= screen_height or y1 < 0:
@@ -216,6 +301,9 @@ def gameLoop(snake_speed):
         y1 += y1_change
         screen.fill(black)
         screen.blit(food_img, (food_x, food_y))
+        screen.blit(food_img, (fxs, fys))
+        screen.blit(food_img, (fxt, fyt))
+        screen.blit(food_img, (fxf, fyf))
 
         snake_head = [x1, y1]
         snake_list.append(snake_head)
@@ -256,37 +344,91 @@ def gameLoop(snake_speed):
         # ---------------------------------------------
 
         pygame.display.update()
-
-        if x1 == food_x and y1 == food_y:
-            # 1. Tạo vị trí thức ăn mới
+        if is_remote_collision(x1, y1, food_x, food_y, remote_blocks=4):
+            # 1. Tạo vị trí thức ăn 1 mới
             food_x, food_y = generate_food_location()
-            while [food_x, food_y] in snake_list:
+            while [food_x, food_y] in snake_list or ([food_x, food_y] == [fxs, fys]) or ([food_x, food_y] == [fxt, fyt]) or ([food_x, food_y] == [fxf, fyf]):
                 food_x, food_y = generate_food_location()
-           
-            probability_of_bonus = snake_speed / 100.0
             
-            # Giá trị cộng thêm khi ăn: +1 hoặc +2 (khi trúng X2)
+            # --- Logic tính điểm/bonus ---
+            probability_of_bonus = snake_speed / 100.0
             bonus_length = 1
             
             if random.random() < probability_of_bonus: 
-                # X2 điểm (cộng 2 thay vì 1)
                 bonus_length = 2
-                
-                # Kích hoạt thông báo +2 điểm
                 points_message_active = True
                 points_message_start_time = pygame.time.get_ticks()
                 message_position = (food_x, food_y) 
                 
-            # 3. Cập nhật độ dài rắn
+            # 2. Cập nhật độ dài rắn
             length_of_snake += bonus_length 
 
-        clock.tick(snake_speed) # Dùng biến snake_speed để kiểm soát tốc độ
+        # KIỂM TRA VA CHẠM VỚI THỨC ĂN 2 (fxs, fys)
+        if is_remote_collision(x1, y1, fxs, fys, remote_blocks=4):
+            # 1. Tạo vị trí thức ăn 2 mới
+            fxs, fys = generate_food_location()
+            # 💥 CẬP NHẬT: Kiểm tra cả food_x, fxt, VÀ fxf
+            while [fxs, fys] in snake_list or ([fxs, fys] == [food_x, food_y]) or ([fxs, fys] == [fxt, fyt]) or ([fxs, fys] == [fxf, fyf]):
+                fxs, fys = generate_food_location()
+            
+            # --- Logic tính điểm/bonus (Dành riêng cho Thức ăn 2) ---
+            probability_of_bonus = snake_speed / 100.0
+            bonus_length = 1
+            
+            if random.random() < probability_of_bonus: 
+                bonus_length = 2
+                points_message_active = True
+                points_message_start_time = pygame.time.get_ticks()
+                message_position = (fxs, fys) 
+                
+            # 2. Cập nhật độ dài rắn
+            length_of_snake += bonus_length 
+            
+        # KIỂM TRA VA CHẠM VỚI THỨC ĂN 3 (fxt, fyt)
+        if is_remote_collision(x1, y1, fxt, fyt, remote_blocks=4):
+            # 1. Tạo vị trí thức ăn 3 mới
+            fxt, fyt = generate_food_location()
+            # 💥 CẬP NHẬT: Kiểm tra cả food_x, fxs, VÀ fxf
+            while [fxt, fyt] in snake_list or ([fxt, fyt] == [fxs, fys]) or ([fxt, fyt] == [food_x, food_y]) or ([fxt, fyt] == [fxf, fyf]):
+                fxt, fyt = generate_food_location()
+        
+            # --- Logic tính điểm/bonus (Dành riêng cho Thức ăn 3) ---
+            probability_of_bonus = snake_speed / 100.0
+            bonus_length = 1
+            
+            if random.random() < probability_of_bonus: 
+                bonus_length = 2
+                points_message_active = True
+                points_message_start_time = pygame.time.get_ticks()
+                message_position = (fxt, fyt)
+                
+            # 2. Cập nhật độ dài rắn
+            length_of_snake += bonus_length 
 
-    pygame.quit()
-    quit()
+        # 💥 THAY ĐỔI 3: KHỐI LOGIC VA CHẠM THỨC ĂN 4 (MỚI)
+        if x1 == fxf and y1 == fyf:
+            # 1. Tạo vị trí thức ăn 4 mới
+            fxf, fyf = generate_food_location()
+            # Đảm bảo thức ăn 4 không trùng với thân rắn hoặc bất kỳ thức ăn nào khác
+            while [fxf, fyf] in snake_list or ([fxf, fyf] == [fxs, fys]) or ([fxf, fyf] == [food_x, food_y]) or ([fxf, fyf] == [fxt, fyt]):
+                fxf, fyf = generate_food_location()
+        
+            # --- Logic tính điểm/bonus (Dành riêng cho Thức ăn 4) ---
+            probability_of_bonus = snake_speed / 100.0
+            bonus_length = 1
+            
+            if random.random() < probability_of_bonus: 
+                bonus_length = 2
+                points_message_active = True
+                points_message_start_time = pygame.time.get_ticks()
+                message_position = (fxf, fyf) # Sử dụng tọa độ thức ăn 4
+                
+            # 2. Cập nhật độ dài rắn
+            length_of_snake += bonus_length 
+            
+        clock.tick(snake_speed)
 
 try:
     main_menu()
 except:
-
     pass
