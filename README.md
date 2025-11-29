@@ -4,6 +4,8 @@
 
 Choose speed on the menu - 6 speeds (New speed: Superior)
 
-Use arrow key to control snake
+Use arrow key or WASD to control snake
 
-**Latest version:1.0**
+You also can import custom speed file
+
+**Latest version:1.2**
